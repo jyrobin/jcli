@@ -344,8 +344,8 @@ func PrintsJson(ctx context.Context) bool {
 type ViperConfig struct {
 	ConfigFile string
 	ConfigName string
-	ConfigPath string
 	ConfigType string
+	ConfigPaths []string
 }
 
 func NewViper(cfg ViperConfig) (*viper.Viper, error) {
@@ -353,25 +353,21 @@ func NewViper(cfg ViperConfig) (*viper.Viper, error) {
 	if cfg.ConfigFile != "" { // in cfg or from command flag
 		vip = viper.New()
 		vip.SetConfigFile(cfg.ConfigFile)
-	} else if cfg.ConfigName != "" {
+	} else if cfg.ConfigName != "" && len(cfg.ConfigPaths) > 0 {
 		vip = viper.New()
-		home := cfg.ConfigPath
-		var err error
-		if home == "" {
-			home, err = os.UserHomeDir()
-			if err != nil {
-				return nil, err
-			}
-		}
-		vip.AddConfigPath(home)
+		vip.SetConfigName(cfg.ConfigName)
+
 		ct := cfg.ConfigType
 		if ct == "" {
 			ct = "yaml"
 		}
 		vip.SetConfigType(ct)
-		vip.SetConfigName(cfg.ConfigName)
+
+		for _, cp := range cfg.ConfigPaths {
+			vip.AddConfigPath(cp)
+		}
 	} else {
-		return nil, fmt.Errorf("Both ConfigFile and ViperName empty")
+		return nil, fmt.Errorf("Insufficicient config file information")
 	}
 
 	vip.AutomaticEnv()
