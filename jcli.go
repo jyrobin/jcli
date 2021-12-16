@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"reflect"
 	"strings"
 
 	"github.com/jessevdk/go-flags"
@@ -29,7 +30,8 @@ import (
 )
 
 const (
-	parserOpts = flags.HelpFlag | flags.PassDoubleDash | flags.PassAfterNonOption
+	parserOpts      = flags.HelpFlag | flags.PassDoubleDash | flags.PassAfterNonOption
+	mainCommandName = "__main__"
 
 	ViperKey     = "__viper__"
 	StdoutKey    = "__stdout__"
@@ -45,27 +47,26 @@ type Cmd struct {
 	Short   string
 	Long    string
 	Factory func(context.Context) interface{}
-	Cmds    []Cmd
+	Cmds    []*Cmd
 }
 
-func (cmd Cmd) AddCommand(cmds ...Cmd) {
+func (cmd Cmd) AddCommand(cmds ...*Cmd) {
 	cmd.Cmds = append(cmd.Cmds, cmds...)
 }
 
 type Cli struct {
-	rootCtx    context.Context
-	Cmds       []Cmd
-	RemainArgs []string
+	rootCtx context.Context
+	Cmds    []*Cmd
 }
 
-func New(ctx context.Context, cmds ...Cmd) *Cli {
-	if ctx == nil {
+func New(ctx context.Context, cmds ...*Cmd) *Cli {
+	if ctx == nil { // ok
 		ctx = context.Background()
 	}
-	return &Cli{ctx, cmds, nil}
+	return &Cli{ctx, cmds}
 }
 
-func (cli Cli) AddCommand(cmds ...Cmd) {
+func (cli Cli) AddCommand(cmds ...*Cmd) {
 	cli.Cmds = append(cli.Cmds, cmds...)
 }
 
@@ -88,21 +89,27 @@ func (cli Cli) String(key string, defs ...string) string {
 	}
 }
 
-func (cli Cli) Execute(args []string) error {
-	return cli.ExecuteContext(cli.Context(), args)
-}
-
 func (cli Cli) ExecuteContext(ctx context.Context, args []string) error {
+	if ctx == nil { // ok
+		ctx = cli.Context()
+	}
+
 	parser := flags.NewParser(&struct{}{}, parserOpts)
 	err := buildCommands(cli.Cmds, parser.Command, ctx)
 	if err == nil {
+		if len(args) == 0 {
+			args = []string{mainCommandName}
+		}
 		_, err = parser.ParseArgs(args)
 	}
-
 	return err
 }
 
-func (cli *Cli) ExecuteBuffer(args []string, printsJson bool) ([]byte, error) {
+func (cli Cli) Execute(args []string) error {
+	return cli.ExecuteContext(nil, args)
+}
+
+func (cli Cli) ExecuteBuffer(args []string, printsJson bool) ([]byte, error) {
 	buf := new(bytes.Buffer)
 	ctx := WithStdout(cli.Context(), buf)
 	ctx = WithValue(ctx, PrintJsonKey, printsJson)
@@ -110,12 +117,12 @@ func (cli *Cli) ExecuteBuffer(args []string, printsJson bool) ([]byte, error) {
 	return buf.Bytes(), err
 }
 
-func (cli *Cli) ExecuteLine(line string, printsJson bool) ([]byte, error) {
+func (cli Cli) ExecuteLine(line string, printsJson bool) ([]byte, error) {
 	words := strings.Fields(line)
 	return cli.ExecuteBuffer(words, printsJson)
 }
 
-func (cli *Cli) ExecuteUnmarshal(line string, ret interface{}) error {
+func (cli Cli) ExecuteUnmarshal(line string, ret interface{}) error {
 	buf, err := cli.ExecuteLine(line, true)
 	if err == nil {
 		err = json.Unmarshal(buf, ret)
@@ -123,8 +130,12 @@ func (cli *Cli) ExecuteUnmarshal(line string, ret interface{}) error {
 	return err
 }
 
-func buildCommands(cmds []Cmd, parent *flags.Command, ctx context.Context) error {
+func buildCommands(cmds []*Cmd, parent *flags.Command, ctx context.Context) error {
 	for _, cmd := range cmds {
+		if cmd == nil {
+			continue
+		}
+
 		var fcmd interface{}
 		if cmd.Factory != nil {
 			fcmd = cmd.Factory(ctx)
@@ -133,7 +144,12 @@ func buildCommands(cmds []Cmd, parent *flags.Command, ctx context.Context) error
 			fcmd = &struct{}{}
 		}
 
-		chcmd, err := parent.AddCommand(cmd.Name, cmd.Short, cmd.Long, fcmd)
+		name := cmd.Name
+		if name == "" {
+			name = mainCommandName
+		}
+
+		chcmd, err := parent.AddCommand(name, cmd.Short, cmd.Long, fcmd)
 		if err != nil {
 			return err
 		}
@@ -166,10 +182,6 @@ func (cli Cli) ExecuteLoop(prompt, historyPath string) error {
 
 	line.SetCtrlCAborts(true)
 
-	//if historyPath == "" {
-	//	fname := fmt.Sprintf(".%s_history", cli.Name())
-	//	historyPath = filepath.Join(os.TempDir(), fname)
-	//}
 	if historyPath != "" {
 		if f, err := os.Open(historyPath); err == nil {
 			_, _ = line.ReadHistory(f)
@@ -222,7 +234,7 @@ func (cli Cli) ExecuteLoop(prompt, historyPath string) error {
 // utils
 
 func WithValue(ctx context.Context, key string, v interface{}) context.Context {
-	if ctx == nil {
+	if ctx == nil { // ok
 		ctx = context.Background()
 	}
 	if v != nil {
@@ -257,12 +269,25 @@ func PrintJson(ctx context.Context, val interface{}) (int, error) {
 	return Println(ctx, string(buf))
 }
 
+func Printj(ctx context.Context, fmt string, val interface{}, rest ...interface{}) error {
+	var err error
+	if PrintsJson(ctx) {
+		_, err = PrintJson(ctx, val)
+	} else {
+		_, err = Printf(ctx, fmt, append([]interface{}{val}, rest...))
+	}
+	return err
+}
+
 func GetViper(ctx context.Context) *viper.Viper {
 	if vip, ok := ctx.Value(ViperKey).(*viper.Viper); ok {
 		return vip
 	}
 	return nil
 }
+
+// For simplicity, utilities below use nil to represent non-present value,
+// thus zero values such as false or 0 are considered not present. Use with care
 
 func GetValue(ctx context.Context, key string) interface{} {
 	val := ctx.Value(key)
@@ -312,11 +337,9 @@ func ValueOrViper(v interface{}, vip *viper.Viper, keys ...string) interface{} {
 	if v != nil {
 		return v
 	}
-	if vip != nil {
-		for _, key := range keys {
-			if val := vip.Get(key); val != nil {
-				return val
-			}
+	for _, key := range keys {
+		if val := vip.Get(key); val != nil {
+			return val
 		}
 	}
 	return nil
@@ -328,6 +351,65 @@ func StringOrViper(v string, vip *viper.Viper, keys ...string) string {
 		return s
 	}
 	return ""
+}
+
+func FieldOrViper(val interface{}, name string, vip *viper.Viper, keys ...string) interface{} {
+	v := reflect.Indirect(reflect.ValueOf(val))
+	return fieldOrViper(v, name, vip, keys)
+}
+
+func fieldOrViper(v reflect.Value, name string, vip *viper.Viper, keys []string) interface{} {
+	if v.Kind() == reflect.Struct {
+		if f := v.FieldByName(name); f.IsValid() {
+			if val := f.Interface(); val != nil {
+				return val
+			}
+		}
+	}
+
+	if vip != nil {
+		for _, key := range keys {
+			if val := vip.Get(key); val != nil {
+				return val
+			}
+		}
+	}
+	return nil
+}
+
+// BuildMap creates a string-keyed map from a struct. Each expr slice consists
+// of the field name (capitalized), followed by a list of keys to search in viper if the
+// named field contains zero value. Furthermore, the key used for the returning map
+// is the first (i.e. canonical) one of the keys slice, or the field name if keys is empty.
+func BuildMap(val interface{}, vip *viper.Viper, exprs ...[]string) map[string]interface{} {
+	v := reflect.Indirect(reflect.ValueOf(val))
+	ret := map[string]interface{}{}
+	for _, expr := range exprs {
+		if len(expr) > 0 {
+			name := expr[0]
+			keys := expr[1:]
+			val := fieldOrViper(v, name, vip, keys)
+			if val != nil {
+				if len(keys) > 0 {
+					ret[keys[0]] = val
+				} else {
+					ret[name] = val
+				}
+			}
+		}
+	}
+	return ret
+}
+
+func BuildStrMap(val interface{}, vip *viper.Viper, exprs ...[]string) map[string]string {
+	m := BuildMap(val, vip, exprs...)
+	ret := map[string]string{}
+	for k, v := range m {
+		if s, ok := v.(string); ok {
+			ret[k] = s
+		}
+	}
+	return ret
 }
 
 func GetStdout(ctx context.Context) io.Writer {
@@ -342,9 +424,9 @@ func PrintsJson(ctx context.Context) bool {
 }
 
 type ViperConfig struct {
-	ConfigFile string
-	ConfigName string
-	ConfigType string
+	ConfigFile  string
+	ConfigName  string
+	ConfigType  string
 	ConfigPaths []string
 }
 

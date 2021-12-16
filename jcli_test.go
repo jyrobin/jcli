@@ -33,7 +33,7 @@ func TestBasic(t *testing.T) {
 	line := "--ui --fmt json --xxx yyy hello --aaa bbb"
 	words := strings.Fields(line)
 
-	args, err := ParseArgs(&opts, words)
+	_, err := ParseArgs(&opts, words)
 	if err == nil {
 		t.Fatal("Should fail with unknown flag `xxx`")
 	}
@@ -41,8 +41,8 @@ func TestBasic(t *testing.T) {
 	line = "--ui --fmt json hello --aaa bbb"
 	words = strings.Fields(line)
 
-	args, err = ParseArgs(&opts, words)
-	if err != nil {
+	var args []string
+	if args, err = ParseArgs(&opts, words); err != nil {
 		t.Fatal(err)
 	}
 
@@ -61,11 +61,20 @@ func TestBasic(t *testing.T) {
 	}
 
 	ctx := goutil.ContextWithMap(nil, vals)
-	cli := New(ctx, Cmd{
-		Name:    "hello",
-		Short:   "Hello",
-		Long:    "Hello",
-		Factory: HelloCmd,
+	cli := New(ctx, &Cmd{
+		Name:  "hello",
+		Short: "Hello",
+		Long:  "Hello",
+		Factory: func(ctx context.Context) interface{} {
+			return &helloCmd{ctx: ctx}
+		},
+	}, &Cmd{
+		Name:  "",
+		Short: "root",
+		Long:  "Root Command",
+		Factory: func(ctx context.Context) interface{} {
+			return &rootCmd{ctx: ctx}
+		},
 	})
 
 	if !cli.Is("Interactive") || !ctx.Value("Interactive").(bool) {
@@ -76,10 +85,17 @@ func TestBasic(t *testing.T) {
 	}
 
 	buf := new(bytes.Buffer)
-	ctx = WithStdout(ctx, buf)
-	cli.ExecuteContext(ctx, []string{"hello", "--name", "you"})
+	ctx1 := WithStdout(ctx, buf)
+	cli.ExecuteContext(ctx1, []string{"hello", "--name", "you"})
 	if buf.String() != "Hello you" {
-		t.Fatalf("Should be '%s', got '%s'", buf.String(), "Hello you")
+		t.Fatalf("Should be '%s', got '%s'", "Hello you", buf.String())
+	}
+
+	buf = new(bytes.Buffer)
+	ctx1 = WithStdout(ctx, buf)
+	cli.ExecuteContext(ctx1, []string{})
+	if buf.String() != "This is root" {
+		t.Fatalf("Should be '%s', got '%s'", "This is root", buf.String())
 	}
 }
 
@@ -88,11 +104,16 @@ type helloCmd struct {
 	Name string `long:"name"`
 }
 
-func HelloCmd(ctx context.Context) interface{} {
-	return &helloCmd{ctx: ctx}
+func (c *helloCmd) Execute([]string) error {
+	Printf(c.ctx, "Hello %s", c.Name)
+	return nil
 }
 
-func (c *helloCmd) Execute(args []string) error {
-	Printf(c.ctx, "Hello %s", c.Name)
+type rootCmd struct {
+	ctx context.Context
+}
+
+func (c *rootCmd) Execute([]string) error {
+	Printf(c.ctx, "This is root")
 	return nil
 }
