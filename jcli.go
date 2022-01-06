@@ -233,6 +233,11 @@ func (cli Cli) ExecuteLoop(prompt, historyPath string) error {
 
 // utils
 
+func IsErrHelp(err error) bool {
+	flagsErr, ok := err.(*flags.Error)
+	return ok && flagsErr.Type == flags.ErrHelp
+}
+
 func WithValue(ctx context.Context, key string, v interface{}) context.Context {
 	if ctx == nil { // ok
 		ctx = context.Background()
