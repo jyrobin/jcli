@@ -1,49 +1,42 @@
-// Copyright (c) 2021 Jing-Ying Chen
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 package jcli
 
 import (
 	"bytes"
 	"context"
 	"reflect"
-	"strings"
 	"testing"
-
-	"github.com/jyrobin/goutil"
 )
 
 func TestBasic(t *testing.T) {
-	opts := struct {
-		Interactive bool   `long:"ui"`
-		Format      string `long:"fmt"`
-	}{}
+	var interactive bool
+	var format string
+	var args []string
+	cli := NewCli("Basics", "Test basics", "0").
+		StringFlag("fmt", "Format", "").
+		BoolFlag("ui", "Interactive", false, &interactive).
+		Action(func(ctx context.Context) error {
+			format = StringFlag(ctx, "fmt", "???")
+			args = OtherArgs(ctx)
+			return nil
+		})
 
+	ctx := context.Background()
 	line := "--ui --fmt json --xxx yyy hello --aaa bbb"
-	words := strings.Fields(line)
-
-	_, err := ParseArgs(&opts, words)
+	_, err := cli.RunLine(ctx, false, line)
 	if err == nil {
 		t.Fatal("Should fail with unknown flag `xxx`")
 	}
 
 	line = "--ui --fmt json hello --aaa bbb"
-	words = strings.Fields(line)
-
-	var args []string
-	if args, err = ParseArgs(&opts, words); err != nil {
+	_, err = cli.RunLine(ctx, false, line)
+	if err != nil {
 		t.Fatal(err)
+	}
+	if format != "json" {
+		t.Fatalf("expect format 'json', got '%s'", format)
+	}
+	if !interactive {
+		t.Fatalf("expect interactive is true")
 	}
 
 	rest := []string{"hello", "--aaa", "bbb"}
@@ -51,69 +44,50 @@ func TestBasic(t *testing.T) {
 		t.Fatalf("Not the same: %+v vs. %+v", args, rest)
 	}
 
-	vals, err := goutil.StructToMap(opts)
-	exp := map[string]interface{}{
-		"Interactive": true,
-		"Format":      "json",
-	}
-	if err != nil || !reflect.DeepEqual(vals, exp) {
-		t.Fatalf("Should equal: %+v vs. %+v", vals, exp)
-	}
-
-	ctx := goutil.ContextWithMap(nil, vals)
-	cli := New(ctx, &Cmd{
-		Name:  "hello",
-		Short: "Hello",
-		Long:  "Hello",
-		Factory: func(ctx context.Context) interface{} {
-			return &helloCmd{ctx: ctx}
-		},
-	}, &Cmd{
-		Name:  "",
-		Short: "root",
-		Long:  "Root Command",
-		Factory: func(ctx context.Context) interface{} {
-			return &rootCmd{ctx: ctx}
-		},
-	})
-
-	if !cli.Is("Interactive") || !ctx.Value("Interactive").(bool) {
-		t.Fatal("Should be interactive")
-	}
-	if cli.String("Format") != "json" || "json" != ctx.Value("Format").(string) {
-		t.Fatal("Should be json")
-	}
+	cli2 := NewCli("Hello", "Test sub command", "0").
+		Action(func(ctx context.Context) error {
+			Printf(ctx, "This is root")
+			return nil
+		})
+	cli2.NewSubCommand("hello", "Hello").
+		StringFlag("name", "Name", "").
+		Action(func(ctx context.Context) error {
+			Printf(ctx, "Hello %s", StringFlag(ctx, "name", "???"))
+			return nil
+		})
 
 	buf := new(bytes.Buffer)
-	ctx1 := WithStdout(ctx, buf)
-	cli.ExecuteContext(ctx1, []string{"hello", "--name", "you"})
+	ctx2 := WithStdout(ctx, buf)
+	err = cli2.Run(ctx2, "hello", "--name", "you")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if buf.String() != "Hello you" {
-		t.Fatalf("Should be '%s', got '%s'", "Hello you", buf.String())
+		t.Fatalf("Should be 'Hello you', got '%s'", buf.String())
 	}
 
-	buf = new(bytes.Buffer)
-	ctx1 = WithStdout(ctx, buf)
-	cli.ExecuteContext(ctx1, []string{})
-	if buf.String() != "This is root" {
-		t.Fatalf("Should be '%s', got '%s'", "This is root", buf.String())
+	ret, err := cli2.RunBuffer(ctx, false, "hello", "--name", "you")
+	if err != nil {
+		t.Fatal(err)
 	}
-}
+	if string(ret) != "Hello you" {
+		t.Fatalf("Should be 'Hello you', got '%s'", string(ret))
+	}
 
-type helloCmd struct {
-	ctx  context.Context
-	Name string `long:"name"`
-}
+	ret, err = cli2.RunBuffer(ctx, false)
+	if string(ret) != "This is root" {
+		t.Fatalf("Should be 'This is root', got '%s'", string(ret))
+	}
 
-func (c *helloCmd) Execute([]string) error {
-	Printf(c.ctx, "Hello %s", c.Name)
-	return nil
-}
+	defCmd := cli2.NewSubCommand("default", "Default").
+		Action(func(ctx context.Context) error {
+			Printf(ctx, "This is default")
+			return nil
+		})
+	cli2.Action(nil).DefaultCommand(defCmd)
 
-type rootCmd struct {
-	ctx context.Context
-}
-
-func (c *rootCmd) Execute([]string) error {
-	Printf(c.ctx, "This is root")
-	return nil
+	ret, err = cli2.RunBuffer(ctx, false)
+	if string(ret) != "This is default" {
+		t.Fatalf("Should be 'This is default', got '%s'", string(ret))
+	}
 }

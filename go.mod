@@ -3,8 +3,6 @@ module github.com/jyrobin/jcli
 go 1.17
 
 require (
-	github.com/jessevdk/go-flags v1.5.0
-	github.com/jyrobin/goutil v0.0.0-20211207145434-327fab1c2165
 	github.com/peterh/liner v1.2.1
 	github.com/spf13/viper v1.9.0
 )
