@@ -123,10 +123,8 @@ func (c *Cli) LongDescription(longdescription string) *Cli {
 }
 
 // Command - Adds commands to the application.
-func (c *Cli) Command(commands ...*Command) *Cli {
-	for _, command := range commands {
-		c.rootCommand.AddCommand(command)
-	}
+func (c *Cli) Commands(commands ...*Command) *Cli {
+	c.rootCommand.SubCommands(commands...)
 	return c
 }
 

@@ -52,6 +52,15 @@ func IntFlag(ctx context.Context, name string, otherwise int) int {
 	return otherwise
 }
 
+func FloatFlag(ctx context.Context, name string, otherwise float64) float64 {
+	if ptr, ok := getValuePointer(ctx, name); ok {
+		if ret, ok := ptr.(*float64); ok {
+			return *ret
+		}
+	}
+	return otherwise
+}
+
 func StringFlag(ctx context.Context, name, otherwise string) string {
 	if ptr, ok := getValuePointer(ctx, name); ok {
 		if ret, ok := ptr.(*string); ok {
@@ -59,6 +68,16 @@ func StringFlag(ctx context.Context, name, otherwise string) string {
 		}
 	}
 	return otherwise
+}
+
+// StringFlags is a convenient function that calls StringFlag with multiple
+// names and empty string as the default value
+func StringFlags(ctx context.Context, names ...string) []string {
+	ret := make([]string, 0, len(names))
+	for _, name := range names {
+		ret = append(ret, StringFlag(ctx, name, ""))
+	}
+	return ret
 }
 
 func BoolFlag(ctx context.Context, name string, otherwise bool) bool {

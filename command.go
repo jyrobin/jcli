@@ -77,8 +77,6 @@ func (c *Command) run(ctx context.Context, args []string) error {
 		return fmt.Errorf("Command not setup correctly")
 	}
 
-	fmt.Println("RUNNNN", args)
-
 	var err error
 
 	// If we have arguments, process them
@@ -132,6 +130,14 @@ func (c *Command) run(ctx context.Context, args []string) error {
 // Action - Define an action from this command
 func (c *Command) Action(callback Action) *Command {
 	c.actionCallback = callback
+	return c
+}
+
+// Command - Adds subcommands to this command
+func (c *Command) SubCommands(commands ...*Command) *Command {
+	for _, command := range commands {
+		c.AddCommand(command)
+	}
 	return c
 }
 
@@ -200,11 +206,11 @@ func (c *Command) NewSubCommand(name, description string) *Command {
 	return result
 }
 
-// AddCommand - Adds a subcommand
+// AddCommand - Adds a subcommand, which should be non-nil
 func (c *Command) AddCommand(command *Command) {
-	if command == nil {
-		return
-	}
+	// if command == nil {
+	// 	return
+	// }
 
 	command.parent = c // the only place parent is set
 	name := command.name
@@ -216,9 +222,9 @@ func (c *Command) AddCommand(command *Command) {
 // for storage, which is shared and not suitable for concurrent execution.
 func (c *Command) BoolFlag(name, description string, val bool, ptrs ...*bool) *Command {
 	if len(ptrs) > 0 {
-		c.flags.addVar(name, description, val, ptrs[0])
+		c.flags.addFlag(name, description, val, ptrs[0])
 	} else {
-		c.flags.addFlag(name, description, val)
+		c.flags.addFlag(name, description, val, nil)
 	}
 	return c
 }
@@ -226,9 +232,9 @@ func (c *Command) BoolFlag(name, description string, val bool, ptrs ...*bool) *C
 // StringFlag - Adds a string flag to the command
 func (c *Command) StringFlag(name, description string, val string, ptrs ...*string) *Command {
 	if len(ptrs) > 0 {
-		c.flags.addVar(name, description, val, ptrs[0])
+		c.flags.addFlag(name, description, val, ptrs[0])
 	} else {
-		c.flags.addFlag(name, description, val)
+		c.flags.addFlag(name, description, val, nil)
 	}
 	return c
 }
@@ -236,9 +242,19 @@ func (c *Command) StringFlag(name, description string, val string, ptrs ...*stri
 // IntFlag - Adds an int flag to the command
 func (c *Command) IntFlag(name, description string, val int, ptrs ...*int) *Command {
 	if len(ptrs) > 0 {
-		c.flags.addVar(name, description, val, ptrs[0])
+		c.flags.addFlag(name, description, val, ptrs[0])
 	} else {
-		c.flags.addFlag(name, description, val)
+		c.flags.addFlag(name, description, val, nil)
+	}
+	return c
+}
+
+// FloatFlag - Adds a float flag to the command
+func (c *Command) FloatFlag(name, description string, val float64, ptrs ...*float64) *Command {
+	if len(ptrs) > 0 {
+		c.flags.addFlag(name, description, val, ptrs[0])
+	} else {
+		c.flags.addFlag(name, description, val, nil)
 	}
 	return c
 }

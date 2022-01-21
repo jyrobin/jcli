@@ -35,6 +35,14 @@ func (fp *flagProto) addFlag(flags *flag.FlagSet, vals map[string]interface{}) {
 		} else {
 			vals[fp.name] = flags.Int(fp.name, v, fp.description)
 		}
+	case float64:
+		if ptr, ok := fp.ptr.(*float64); ok && ptr != nil {
+			flags.Float64Var(ptr, fp.name, v, fp.description)
+			vals[fp.name] = ptr
+		} else {
+			vals[fp.name] = flags.Float64(fp.name, v, fp.description)
+		}
+
 	case bool:
 		if ptr, ok := fp.ptr.(*bool); ok && ptr != nil {
 			flags.BoolVar(ptr, fp.name, v, fp.description)
@@ -57,11 +65,7 @@ func (fs *flagSet) flagCount() int {
 	return len(fs.protos)
 }
 
-func (fs *flagSet) addFlag(name, description string, val interface{}) {
-	fs.protos[name] = &flagProto{name, description, val, nil}
-}
-
-func (fs *flagSet) addVar(name, description string, val interface{}, ptr interface{}) {
+func (fs *flagSet) addFlag(name, description string, val interface{}, ptr interface{}) {
 	fs.protos[name] = &flagProto{name, description, val, ptr}
 }
 
