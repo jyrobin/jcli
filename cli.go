@@ -41,6 +41,7 @@ type Cli struct {
 	preRunCommand  func(context.Context, *Cli) error
 	bannerFunction func(context.Context, *Cli) string
 	errorHandler   func(string, error) error
+	helpHandler    func(context.Context, *Cli) error
 }
 
 // NewCli - Creates a new Cli application object
@@ -67,19 +68,6 @@ func (c *Cli) Name() string {
 // ShortDescription - Get the Application short description.
 func (c *Cli) ShortDescription() string {
 	return c.rootCommand.shortdescription
-}
-
-// SetBannerFunction - Set the function that is called
-// to get the banner string.
-func (c *Cli) SetBannerFunction(fn func(context.Context, *Cli) string) {
-	c.bannerFunction = fn
-}
-
-// SetErrorFunction - Set custom error message when undefined
-// flags are used by the user. First argument is a string containing
-// the commnad path used. Second argument is the undefined flag error.
-func (c *Cli) SetErrorFunction(fn func(string, error) error) {
-	c.errorHandler = fn
 }
 
 // PrintBanner - Prints the application banner!
@@ -155,6 +143,27 @@ func (c *Cli) Commands(commands ...*Command) *Cli {
 // no other commands given.
 func (c *Cli) DefaultCommand(defaultCommand *Command) *Cli {
 	c.defaultCommand = defaultCommand
+	return c
+}
+
+// BannerFunction - Set the function that is called
+// to get the banner string.
+func (c *Cli) BannerFunction(fn func(context.Context, *Cli) string) *Cli {
+	c.bannerFunction = fn
+	return c
+}
+
+// ErrorFunction - Set custom error message when undefined
+// flags are used by the user. First argument is a string containing
+// the commnad path used. Second argument is the undefined flag error.
+func (c *Cli) ErrorFunction(fn func(string, error) error) *Cli {
+	c.errorHandler = fn
+	return c
+}
+
+// HelpHandler - Sets the help handler
+func (c *Cli) HelpHandler(handler func(context.Context, *Cli) error) *Cli {
+	c.helpHandler = handler
 	return c
 }
 

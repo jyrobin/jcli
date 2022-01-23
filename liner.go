@@ -65,7 +65,9 @@ func RunLoop(cli *Cli, prompt, historyPath string) error {
 		}
 
 		if err = cli.Run(ctx, words...); err != nil {
-			fmt.Println(err)
+			if err != ErrHelp {
+				fmt.Println(err)
+			}
 		}
 
 		line.AppendHistory(cmd)

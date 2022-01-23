@@ -144,10 +144,13 @@ func (c *Command) run(ctx context.Context, args []string) error {
 		}
 	}
 
-	// Nothing left we can do
-	c.PrintHelp(ctx)
+	if app.helpHandler != nil {
+		return app.helpHandler(ctx, app)
+	}
 
-	return nil
+	// Nothing left we can do.
+	c.PrintHelp(ctx)
+	return ErrHelp
 }
 
 // Action - Define an action from this command

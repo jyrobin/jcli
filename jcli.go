@@ -29,6 +29,7 @@ package jcli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -39,6 +40,8 @@ const (
 	StdoutKey     = "__stdout__"
 	PrintJsonKey  = "__print_json__"
 )
+
+var ErrHelp = errors.New("jcli: help requested")
 
 // defaultBannerFunction prints a banner for the application.
 // If version is a blank string, it is ignored.
