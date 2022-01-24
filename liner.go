@@ -12,7 +12,7 @@ import (
 	"github.com/peterh/liner"
 )
 
-func RunLoop(cli *Cli, prompt, historyPath string) error {
+func RunLoop(cli *Cli, ctx context.Context, prompt, historyPath string) error {
 	line := liner.NewLiner()
 
 	defer func() {
@@ -40,7 +40,6 @@ func RunLoop(cli *Cli, prompt, historyPath string) error {
 		}
 	}
 
-	ctx := context.TODO()
 	prompt = fmt.Sprintf("[%s] ", prompt)
 	for {
 		cmd, err := line.Prompt(prompt)
