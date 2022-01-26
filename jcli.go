@@ -142,31 +142,42 @@ func WithStdout(ctx context.Context, w io.Writer) context.Context {
 	return context.WithValue(ctx, StdoutKey, w)
 }
 
-func Printf(ctx context.Context, format string, args ...interface{}) (int, error) {
+func Printf(ctx context.Context, format string, args ...interface{}) error {
+	var err error
 	if w, ok := ctx.Value(StdoutKey).(io.Writer); ok {
-		return fmt.Fprintf(w, format, args...)
+		_, err = fmt.Fprintf(w, format, args...)
+	} else {
+		_, err = fmt.Fprintf(os.Stdout, format, args...)
 	}
-	return fmt.Fprintf(os.Stdout, format, args...)
+	return err
 }
 
-func Println(ctx context.Context, args ...interface{}) (int, error) {
+func Println(ctx context.Context, args ...interface{}) error {
+	var err error
 	if w, ok := ctx.Value(StdoutKey).(io.Writer); ok {
-		return fmt.Fprintln(w, args...)
+		_, err = fmt.Fprintln(w, args...)
+	} else {
+		_, err = fmt.Fprintln(os.Stdout, args...)
 	}
-	return fmt.Fprintln(os.Stdout, args...)
+	return err
 }
 
-func PrintJson(ctx context.Context, val interface{}) (int, error) {
-	buf, _ := json.MarshalIndent(val, "", "  ")
+func PrintJson(ctx context.Context, val interface{}, opts ...string) error {
+	var buf []byte
+	if len(opts) == 0 {
+		buf, _ = json.Marshal(val)
+	} else if len(opts) == 1 {
+		buf, _ = json.MarshalIndent(val, "", opts[0])
+	} else {
+		buf, _ = json.MarshalIndent(val, opts[1], opts[0])
+	}
 	return Println(ctx, string(buf))
 }
 
 func Printj(ctx context.Context, fmt string, val interface{}, rest ...interface{}) error {
-	var err error
 	if PrintsJson(ctx) {
-		_, err = PrintJson(ctx, val)
+		return PrintJson(ctx, val, "  ")
 	} else {
-		_, err = Printf(ctx, fmt, append([]interface{}{val}, rest...))
+		return Printf(ctx, fmt, append([]interface{}{val}, rest...))
 	}
-	return err
 }
