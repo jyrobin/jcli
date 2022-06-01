@@ -39,6 +39,7 @@ const (
 	FlagValuesKey = "__flag_values__"
 	StdoutKey     = "__stdout__"
 	PrintJsonKey  = "__print_json__"
+	QuietKey      = "__quiet__"
 )
 
 var ErrHelp = errors.New("jcli: help requested")
@@ -133,6 +134,11 @@ func Stdout(ctx context.Context) io.Writer {
 	return os.Stdout
 }
 
+func Quiet(ctx context.Context) bool {
+	b, ok := ctx.Value(QuietKey).(bool)
+	return ok && b
+}
+
 func PrintsJson(ctx context.Context) bool {
 	b, ok := ctx.Value(PrintJsonKey).(bool)
 	return ok && b
@@ -175,7 +181,9 @@ func PrintJson(ctx context.Context, val interface{}, opts ...string) error {
 }
 
 func Printj(ctx context.Context, fmt string, val interface{}, rest ...interface{}) error {
-	if PrintsJson(ctx) {
+	if Quiet(ctx) {
+		return nil
+	} else if PrintsJson(ctx) || fmt == "" {
 		return PrintJson(ctx, val, "  ")
 	} else {
 		return Printf(ctx, fmt, append([]interface{}{val}, rest...))

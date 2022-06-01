@@ -7,5 +7,4 @@ with a provided context to make it more thread-safe. But the design is still unn
 
 Current implementation derives from a simpler library [clir](https://github.com/leaanthony/clir), by
 adding support for context.Context and factoring out some side-effecting code, to allow concurrent
-execution on the same command tree. (See the license notices in the relevant source files).
-
+execution on the same command tree.
