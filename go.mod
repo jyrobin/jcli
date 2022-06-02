@@ -1,4 +1,4 @@
-module jcli
+module github.com/jyrobin/jcli
 
 go 1.18
 
